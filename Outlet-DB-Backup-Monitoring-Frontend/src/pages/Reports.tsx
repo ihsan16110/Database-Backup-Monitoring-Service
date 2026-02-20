@@ -102,12 +102,14 @@ const Reports: React.FC = () => {
     const link = document.createElement("a");
     link.href = url;
 
-    const modeTag = isIB ? "ibstorage" : "backup";
-    const datePart = dateFrom || dateTo
-      ? `_${dateFrom || "start"}_to_${dateTo || "now"}`
-      : "";
-    const outletPart = selectedOutlet ? `_${selectedOutlet}` : "";
-    link.download = `${modeTag}_report${outletPart}${datePart}.csv`;
+    const modeTag = isIB ? "ibstorage_backup_report" : "d_drive_backup_report";
+    const now = new Date();
+    const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const hours = now.getHours();
+    const h12 = hours % 12 || 12;
+    const ampm = hours < 12 ? "am" : "pm";
+    const timePart = `${h12}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")} ${ampm}`;
+    link.download = `${modeTag}_${datePart}_${timePart}.csv`;
 
     link.click();
     URL.revokeObjectURL(url);
