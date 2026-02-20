@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Server block 1 -->
+  <rect x="0" y="0" width="370" height="148" fill="#000"/>
+  <rect x="40" y="44" width="56" height="60" fill="#fff"/>
+  <rect x="116" y="44" width="36" height="60" fill="#fff"/>
+  <rect x="200" y="44" width="72" height="60" fill="#fff"/>
+
+  <!-- Server block 2 -->
+  <rect x="0" y="172" width="370" height="148" fill="#000"/>
+  <rect x="40" y="216" width="72" height="60" fill="#fff"/>
+  <rect x="132" y="216" width="36" height="60" fill="#fff"/>
+  <rect x="200" y="216" width="72" height="60" fill="#fff"/>
+
+  <!-- Server block 3 -->
+  <rect x="0" y="344" width="300" height="148" fill="#000"/>
+  <rect x="40" y="388" width="56" height="60" fill="#fff"/>
+  <rect x="116" y="388" width="56" height="60" fill="#fff"/>
+
+  <!-- Eye shape -->
+  <path d="M270,420 Q350,310 460,420 Q350,530 270,420 Z" fill="#000"/>
+  <circle cx="370" cy="420" r="56" fill="#fff"/>
+  <circle cx="370" cy="420" r="32" fill="#000"/>
+  <circle cx="358" cy="410" r="10" fill="#fff"/>
+</svg>

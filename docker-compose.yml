@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./Outlet-Db-Backup-Monitoring-Backend
+    container_name: backup-monitor-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./Outlet-Db-Backup-Monitoring-Backend/.env
+    environment:
+      - TZ=Asia/Dhaka
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    build: ./Outlet-DB-Backup-Monitoring-Frontend
+    container_name: backup-monitor-frontend
+    ports:
+      - "3004:80"
+    environment:
+      - TZ=Asia/Dhaka
+    depends_on:
+      - backend
+    restart: unless-stopped
