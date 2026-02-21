@@ -14,6 +14,7 @@ const Reports: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
   const pageSize = 10;
 
   const modeLabel = mode === "d-drive" ? "D Drive" : "IBSTORAGE";
@@ -72,58 +73,66 @@ const Reports: React.FC = () => {
   const totalPages = Math.ceil(results.length / pageSize);
   const paginatedResults = results.slice((page - 1) * pageSize, page * pageSize);
 
-  const exportCSV = () => {
-    const isIB = mode === "ibstorage";
-    const headers = isIB
-      ? ["#", "Outlet", "IP", "Drive", "Status", "Scan Date", "Last Backup Taken", "Backup File", "Backup Size", "Error"]
-      : ["#", "Outlet", "IP", "Status", "Scan Date", "Last Backup Taken", "Backup File", "Backup Size", "Error"];
-    const rows = results.map((r: any, i: number) => {
-      const base = [
-        i + 1,
-        r.outletCode,
-        r.server,
-      ];
-      if (isIB) base.push(r.driveLetter || "");
-      base.push(
-        r.status,
-        r.scanDate || "",
-        r.lastModified ? new Date(r.lastModified).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }) : "",
-        r.file || "",
-        r.backupsize || "",
-        r.errorDetails || "",
-      );
-      return base;
-    });
+  const exportCSV = async () => {
+    setExporting(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const isIB = mode === "ibstorage";
+      const headers = isIB
+        ? ["#", "Outlet", "IP", "Drive", "Status", "Scan Date", "Last Backup Taken", "Backup File", "Backup Size", "Error"]
+        : ["#", "Outlet", "IP", "Status", "Scan Date", "Last Backup Taken", "Backup File", "Backup Size", "Error"];
+      const rows = results.map((r: any, i: number) => {
+        const base = [
+          i + 1,
+          r.outletCode,
+          r.server,
+        ];
+        if (isIB) base.push(r.driveLetter || "");
+        base.push(
+          r.status,
+          r.scanDate || "",
+          r.lastModified ? new Date(r.lastModified).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true }) : "",
+          r.file || "",
+          r.backupsize || "",
+          r.errorDetails || "",
+        );
+        return base;
+      });
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row: any) =>
-        row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
-    ].join("\n");
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((row: any) =>
+          row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+        ),
+      ].join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
 
-    const modeTag = isIB ? "ibstorage_backup_report" : "d_drive_backup_report";
-    const now = new Date();
-    const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const hours = now.getHours();
-    const h12 = hours % 12 || 12;
-    const ampm = hours < 12 ? "am" : "pm";
-    const timePart = `${h12}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")} ${ampm}`;
-    link.download = `${modeTag}_${datePart}_${timePart}.csv`;
+      const modeTag = isIB ? "ibstorage_backup_report" : "d_drive_backup_report";
+      const now = new Date();
+      const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const hours = now.getHours();
+      const h12 = hours % 12 || 12;
+      const ampm = hours < 12 ? "am" : "pm";
+      const timePart = `${h12}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")} ${ampm}`;
+      link.download = `${modeTag}_${datePart}_${timePart}.csv`;
 
-    link.click();
-    URL.revokeObjectURL(url);
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setTimeout(() => setExporting(false), 1000);
+    }
   };
 
   const hasFilters = selectedOutlet || dateFrom || dateTo;
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Fixed upper section */}
+      <div className="flex-shrink-0 p-6 pb-0">
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
@@ -321,50 +330,63 @@ const Reports: React.FC = () => {
         </div>
       )}
 
-      {/* Results Table */}
+      {/* Report Results Header - fixed */}
       {searched && !loading && results.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Table Header */}
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Report Results</h2>
-              <div className="flex items-center gap-2 mt-1">
-                {selectedOutlet && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                    {selectedOutlet}
-                  </span>
-                )}
-                {dateFrom && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                    From: {dateFrom}
-                  </span>
-                )}
-                {dateTo && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                    To: {dateTo}
-                  </span>
-                )}
-                {!selectedOutlet && !dateFrom && !dateTo && (
-                  <span className="text-xs text-gray-400">All outlets, all dates</span>
-                )}
-              </div>
+        <div className="bg-white rounded-t-xl shadow-sm border border-gray-200 px-6 py-4 mt-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Report Results</h2>
+            <div className="flex items-center gap-2 mt-1">
+              {selectedOutlet && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                  {selectedOutlet}
+                </span>
+              )}
+              {dateFrom && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                  From: {dateFrom}
+                </span>
+              )}
+              {dateTo && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                  To: {dateTo}
+                </span>
+              )}
+              {!selectedOutlet && !dateFrom && !dateTo && (
+                <span className="text-xs text-gray-400">All outlets, all dates</span>
+              )}
             </div>
-            <button
-              onClick={exportCSV}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-all duration-150 shadow-sm hover:shadow"
-            >
+          </div>
+          <button
+            onClick={exportCSV}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-all duration-150 shadow-sm hover:shadow"
+          >
+            {exporting ? (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            ) : (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Export CSV
-            </button>
-          </div>
+            )}
+            {exporting ? "Exporting..." : "Export CSV"}
+          </button>
+        </div>
+      )}
 
-          {/* Table */}
-          <div className="overflow-x-auto">
+      </div>
+      {/* End of fixed upper section */}
+
+      {/* Scrollable lower section */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      {/* Results Table */}
+      {searched && !loading && results.length > 0 && (
+        <div className="bg-white shadow-sm border-x border-b border-gray-200 rounded-b-xl">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-12">#</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Outlet</th>
@@ -422,10 +444,9 @@ const Reports: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          </div>
 
           {/* Table Footer with Pagination */}
-          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between">
+          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 rounded-b-xl text-xs text-gray-500 flex items-center justify-between">
             <span>
               Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, results.length)} of{" "}
               {results.length} {results.length === 1 ? "entry" : "entries"}
@@ -554,6 +575,8 @@ const Reports: React.FC = () => {
           <p className="text-sm text-gray-500">Fetching {modeLabel.toLowerCase()} backup records. This may take a moment...</p>
         </div>
       )}
+      </div>
+      {/* End of scrollable lower section */}
     </div>
   );
 };
