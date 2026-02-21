@@ -115,7 +115,7 @@ const Backups: React.FC = () => {
     });
   };
 
-  const toggleSelectAll = () => {
+  const toggleSelectPage = () => {
     const pageItems = paginatedFiltered.map((r) => r.outletCode);
     const allPageSelected = pageItems.every((code) => selected.has(code));
     if (allPageSelected) {
@@ -128,6 +128,21 @@ const Backups: React.FC = () => {
       setSelected((prev) => new Set([...Array.from(prev), ...pageItems]));
     }
   };
+
+  const selectAllFiltered = () => {
+    const allCodes = filtered.map((r) => r.outletCode);
+    setSelected((prev: Set<string>) => new Set([...Array.from(prev), ...allCodes]));
+  };
+
+  const selectAllAdvanced = () => {
+    const allCodes = advancedDateResults.map((r) => r.outletCode);
+    setSelected((prev: Set<string>) => new Set([...Array.from(prev), ...allCodes]));
+  };
+
+  // Check if all items on current page are selected (for the banner)
+  const allPageSelected = paginatedFiltered.length > 0 && paginatedFiltered.every((r) => selected.has(r.outletCode));
+  const allFilteredSelected = filtered.length > 0 && filtered.every((r) => selected.has(r.outletCode));
+  const showSelectAllBanner = allPageSelected && !allFilteredSelected && filtered.length > pageSize;
 
   const handleSync = async () => {
     if (selected.size === 0) return;
@@ -544,7 +559,7 @@ const Backups: React.FC = () => {
                         paginatedFiltered.length > 0 &&
                         paginatedFiltered.every((r) => selected.has(r.outletCode))
                       }
-                      onChange={toggleSelectAll}
+                      onChange={toggleSelectPage}
                       className="rounded border-gray-300"
                     />
                   </th>
@@ -559,6 +574,26 @@ const Backups: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
+                {showSelectAllBanner && (
+                  <tr>
+                    <td colSpan={isIB ? 9 : 8} className="bg-blue-50 px-4 py-2 text-sm text-center text-blue-700">
+                      All {paginatedFiltered.length} outlets on this page are selected.{" "}
+                      <button onClick={selectAllFiltered} className="font-semibold underline hover:text-blue-900">
+                        Select all {filtered.length} {statusFilter === "failed" ? "failed " : ""}outlets
+                      </button>
+                    </td>
+                  </tr>
+                )}
+                {allFilteredSelected && filtered.length > pageSize && (
+                  <tr>
+                    <td colSpan={isIB ? 9 : 8} className="bg-blue-50 px-4 py-2 text-sm text-center text-blue-700">
+                      All {filtered.length} {statusFilter === "failed" ? "failed " : ""}outlets are selected.{" "}
+                      <button onClick={() => setSelected(new Set())} className="font-semibold underline hover:text-blue-900">
+                        Clear selection
+                      </button>
+                    </td>
+                  </tr>
+                )}
                 {paginatedFiltered.map((r, i) => (
                   <tr
                     key={r.outletCode}
@@ -698,11 +733,70 @@ const Backups: React.FC = () => {
             These outlets have backup dates beyond the current year. Their
             server dates may be incorrect.
           </p>
+
+          {/* Sync bar for advanced date */}
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <button
+              onClick={selectAllAdvanced}
+              className="px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
+            >
+              Select All ({advancedDateResults.length})
+            </button>
+
+            {selected.size > 0 && (
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {syncing ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    Syncing...
+                  </>
+                ) : (
+                  <>Sync Selected ({selected.size})</>
+                )}
+              </button>
+            )}
+
+            {selected.size > 0 && (
+              <button
+                onClick={() => setSelected(new Set())}
+                className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Clear selection
+              </button>
+            )}
+          </div>
+
           <div className="bg-white shadow rounded-lg overflow-hidden border-l-4 border-orange-400">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-gray-500 uppercase bg-orange-50">
                   <tr>
+                    <th className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={advancedDateResults.length > 0 && advancedDateResults.every((r) => selected.has(r.outletCode))}
+                        onChange={() => {
+                          const allSelected = advancedDateResults.every((r) => selected.has(r.outletCode));
+                          if (allSelected) {
+                            setSelected((prev: Set<string>) => {
+                              const next = new Set(prev);
+                              advancedDateResults.forEach((r) => next.delete(r.outletCode));
+                              return next;
+                            });
+                          } else {
+                            selectAllAdvanced();
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                    </th>
                     <th className="px-4 py-3">#</th>
                     <th className="px-4 py-3">Outlet</th>
                     <th className="px-4 py-3">Server</th>
@@ -715,7 +809,15 @@ const Backups: React.FC = () => {
                 </thead>
                 <tbody>
                   {advancedDateResults.map((r, i) => (
-                    <tr key={r.outletCode} className="border-b hover:bg-orange-50">
+                    <tr key={r.outletCode} className={`border-b hover:bg-orange-50 ${selected.has(r.outletCode) ? "bg-blue-50" : ""}`}>
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.outletCode)}
+                          onChange={() => toggleSelect(r.outletCode)}
+                          className="rounded border-gray-300"
+                        />
+                      </td>
                       <td className="px-4 py-3 text-gray-400">{i + 1}</td>
                       <td className="px-4 py-3 font-medium">{r.outletCode}</td>
                       <td className="px-4 py-3 text-gray-600">

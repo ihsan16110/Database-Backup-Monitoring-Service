@@ -51,12 +51,12 @@ export const syncIBStorageOutlets = async (outletCodes: string[]) => {
   return response.data;
 };
 
-export const loginUser = async (userId: string, password: string) => {
+export const loginUser = async (userId: string, password: string): Promise<any> => {
   const response = await api.post("/auth/login", { userId, password });
   return response.data;
 };
 
-export const fetchCurrentUser = async () => {
+export const fetchCurrentUser = async (): Promise<any> => {
   const response = await api.get("/auth/me");
   return response.data;
 };
