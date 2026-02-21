@@ -5,6 +5,28 @@ const api = axios.create({
   timeout: 300000,
 });
 
+// Attach JWT token to every request
+api.interceptors.request.use((config: any) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// On 401 responses, clear auth state and redirect to login
+api.interceptors.response.use(
+  (response: any) => response,
+  (error: any) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/backup-monitor/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const fetchData = async (endpoint: string) => {
   try {
     const response = await api.get(endpoint);
@@ -26,5 +48,15 @@ export const syncIBStorageOutlets = async (outletCodes: string[]) => {
   const response = await api.post("/ibstorage-status/sync", {
     outlets: outletCodes,
   });
+  return response.data;
+};
+
+export const loginUser = async (userId: string, password: string) => {
+  const response = await api.post("/auth/login", { userId, password });
+  return response.data;
+};
+
+export const fetchCurrentUser = async () => {
+  const response = await api.get("/auth/me");
   return response.data;
 };

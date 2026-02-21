@@ -14,6 +14,7 @@ A full-stack web application to monitor database backup status across **1000+ ou
   - [Run Locally (Development)](#run-locally-development)
 - [Project Structure](#project-structure)
 - [API Reference](#api-reference)
+- [Authentication & Authorization](#authentication--authorization)
 - [Database Schema](#database-schema)
 - [Logging](#logging)
 - [Contributing](#contributing)
@@ -23,10 +24,12 @@ A full-stack web application to monitor database backup status across **1000+ ou
 
 - **Real-time Scanning** - Scan 1000+ servers concurrently with live progress via Server-Sent Events (SSE)
 - **Dual Backup Modes** - Monitor both D-Drive and IBSTORAGE (USB portable drive) backups
+- **JWT Authentication** - Secure login with bcrypt-hashed passwords and JSON Web Tokens
+- **Role-Based Access Control** - Admin and Support roles with route-level permission enforcement
 - **Dashboard** - At-a-glance stats with success/failure counts and daily trend charts
 - **Backup Details** - Paginated table with status, last backup date, file name, and size
 - **Reports & Export** - Filter by outlet, date range, or status and export to CSV
-- **Selective Re-sync** - Re-scan individual outlets without running a full scan
+- **Selective Re-sync** - Re-scan individual outlets without running a full scan (Admin only)
 - **Back-date Scanning** - Scan backup status for previous dates
 - **Historical Tracking** - Daily records stored in SQL Server for trend analysis
 - **Auto-detection** - Automatically detects USB drive letters for IBSTORAGE backups
@@ -37,6 +40,7 @@ A full-stack web application to monitor database backup status across **1000+ ou
 |------------|-----------------------------------------------------|
 | Frontend   | React 19, TypeScript, Tailwind CSS, Recharts        |
 | Backend    | Python 3.13, Flask 3, Gunicorn                      |
+| Auth       | JWT (PyJWT), bcrypt password hashing                |
 | Database   | Microsoft SQL Server (ODBC Driver 17)               |
 | Protocol   | SMB/CIFS via `smbprotocol`                          |
 | Deployment | Docker Compose, Nginx (reverse proxy)               |
@@ -47,7 +51,7 @@ A full-stack web application to monitor database backup status across **1000+ ou
                     +-----------+
                     |  Browser  |
                     +-----+-----+
-                          |
+                          |  JWT Bearer Token
                     +-----v-----+
                     |   Nginx   |  Port 3004
                     |  (Frontend)|
@@ -59,6 +63,11 @@ A full-stack web application to monitor database backup status across **1000+ ou
           | React SPA    |  | Flask API    |  Port 5000
           | (Static)     |  | (Gunicorn)   |
           +--------------+  +------+-------+
+                                   |
+                         +---------+---------+
+                         | Auth Middleware    |
+                         | (JWT + RBAC)      |
+                         +---------+---------+
                                    |
                     +--------------+--------------+
                     |                             |
@@ -102,6 +111,10 @@ SMB_USER=Administrator
 SMB_PASS=your_password
 IB_STORAGE_DRIVES=e$,f$,g$,h$,i$
 IB_STORAGE_FOLDER=BackupFull
+
+# JWT Authentication
+JWT_SECRET_KEY=your-random-256-bit-hex-key
+JWT_EXPIRATION_HOURS=8
 
 # CORS
 CORS_ORIGINS=http://localhost:3004
@@ -180,10 +193,14 @@ Outlet DB Backup Monitoring/
 │       ├── __init__.py                 # Flask app factory
 │       ├── config.py                   # Config loader
 │       ├── logging_config.py           # Daily rotating logs
+│       ├── middleware/
+│       │   └── auth.py                 # @token_required, @role_required decorators
 │       ├── routes/api/v1/
+│       │   ├── auth_routes.py          # Login & session endpoints
 │       │   ├── backup_routes.py        # D-Drive API endpoints
 │       │   └── ibstorage_routes.py     # IBSTORAGE API endpoints
 │       └── services/
+│           ├── auth_service.py         # JWT + bcrypt authentication
 │           ├── backup_service.py       # D-Drive scan logic
 │           └── Ib_Storage_backup_service.py  # IBSTORAGE scan logic
 │
@@ -213,24 +230,58 @@ Outlet DB Backup Monitoring/
 
 All endpoints are prefixed with `/api/v1`.
 
+### Authentication
+
+| Method | Endpoint         | Auth     | Description                          |
+|--------|------------------|----------|--------------------------------------|
+| POST   | `/auth/login`    | Public   | Authenticate with User ID & password |
+| GET    | `/auth/me`       | Token    | Validate token & return current user |
+
+**Login request:**
+
+```json
+POST /api/v1/auth/login
+{
+  "userId": "32787",
+  "password": "your_password"
+}
+```
+
+**Login response:**
+
+```json
+{
+  "status": "success",
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "userId": "32787",
+    "userName": "John Doe",
+    "userType": "A",
+    "designation": "IT Admin"
+  }
+}
+```
+
 ### D-Drive Backup
 
-| Method | Endpoint                    | Description                              |
-|--------|-----------------------------|------------------------------------------|
-| GET    | `/backup-status/scan`       | SSE stream - scan all servers with live progress |
-| GET    | `/backup-stats`             | Fetch saved backup records (read-only)   |
-| POST   | `/backup-status/sync`       | Re-scan specific outlets                 |
-| GET    | `/backup-stats/daily-summary` | Aggregated daily success/failure counts |
-| GET    | `/outlets`                  | List all outlet codes                    |
+| Method | Endpoint                      | Auth          | Description                              |
+|--------|-------------------------------|---------------|------------------------------------------|
+| GET    | `/backup-status/scan`         | Public*       | SSE stream - scan all servers with live progress |
+| GET    | `/backup-stats`               | Admin/Support | Fetch saved backup records (read-only)   |
+| POST   | `/backup-status/sync`         | Admin only    | Re-scan specific outlets                 |
+| GET    | `/backup-stats/daily-summary` | Admin/Support | Aggregated daily success/failure counts  |
+| GET    | `/outlets`                    | Admin/Support | List all outlet codes                    |
 
 ### IBSTORAGE Backup
 
-| Method | Endpoint                       | Description                              |
-|--------|--------------------------------|------------------------------------------|
-| GET    | `/ibstorage-status/scan`       | SSE stream - scan all servers with live progress |
-| GET    | `/ibstorage-stats`             | Fetch saved backup records (read-only)   |
-| POST   | `/ibstorage-status/sync`       | Re-scan specific outlets                 |
-| GET    | `/ibstorage-stats/daily-summary` | Aggregated daily success/failure counts |
+| Method | Endpoint                         | Auth          | Description                              |
+|--------|----------------------------------|---------------|------------------------------------------|
+| GET    | `/ibstorage-status/scan`         | Public*       | SSE stream - scan all servers with live progress |
+| GET    | `/ibstorage-stats`               | Admin/Support | Fetch saved backup records (read-only)   |
+| POST   | `/ibstorage-status/sync`         | Admin only    | Re-scan specific outlets                 |
+| GET    | `/ibstorage-stats/daily-summary` | Admin/Support | Aggregated daily success/failure counts  |
+
+> \*SSE scan endpoints are unprotected because the browser EventSource API does not support custom headers. Scan results are only accessible through the protected `/stats` endpoints.
 
 ### Common Query Parameters
 
@@ -265,6 +316,33 @@ POST /api/v1/backup-status/sync
 }
 ```
 
+## Authentication & Authorization
+
+The application uses **JWT (JSON Web Token)** authentication with **bcrypt** password hashing.
+
+### Roles
+
+| Role    | UserType | Permissions                                      |
+|---------|----------|--------------------------------------------------|
+| Admin   | `A`      | Full access: view data, trigger scans, sync outlets, manage settings |
+| Support | `S`      | Read-only: view dashboard, backups, reports       |
+
+### Auth Flow
+
+1. User submits User ID + password to `POST /auth/login`
+2. Backend verifies credentials against `UserManager` table (bcrypt hash comparison)
+3. On success, a JWT token is returned (valid for 8 hours by default)
+4. Frontend stores the token in `localStorage` and attaches it as `Authorization: Bearer <token>` on all API requests
+5. On token expiry or 401 response, the user is redirected to the login page
+
+### Security Features
+
+- **bcrypt password hashing** - Passwords are stored as bcrypt hashes (`$2a$12$...`)
+- **Account lockout** - Account locks after 5 consecutive failed login attempts
+- **Login tracking** - `LoginFalseAttempt` counter and `LoginActiveTime` are updated per login
+- **Token expiration** - JWTs expire after a configurable number of hours
+- **Route-level RBAC** - Each API endpoint enforces role requirements via middleware decorators
+
 ## Database Schema
 
 The application uses two main tables with the same structure:
@@ -284,6 +362,20 @@ The application uses two main tables with the same structure:
 | DriveLetter*    | NVARCHAR(10)   | USB drive letter (IBSTORAGE only) |
 
 > Composite primary key on `(OutletServer, ScanDate)` ensures one record per outlet per day.
+
+**`UserManager`**
+
+| Column             | Type           | Description                       |
+|--------------------|----------------|-----------------------------------|
+| UserID             | NVARCHAR(20)   | Unique user identifier (PK)      |
+| UserName           | NVARCHAR(100)  | Display name                     |
+| Designation        | NVARCHAR(100)  | Job title                        |
+| UserType           | CHAR(1)        | `A` (Admin) or `S` (Support)    |
+| Password           | NVARCHAR(255)  | bcrypt-hashed password           |
+| Status             | CHAR(1)        | `Y` (active) or `N` (inactive)  |
+| Avatar             | NVARCHAR(255)  | Profile picture path             |
+| LoginFalseAttempt  | INT            | Failed login counter (locks at 5)|
+| LoginActiveTime    | DATETIME       | Last successful login timestamp  |
 
 ## Logging
 

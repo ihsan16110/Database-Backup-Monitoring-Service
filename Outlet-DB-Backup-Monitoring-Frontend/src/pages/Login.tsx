@@ -23,21 +23,34 @@ const LoginArrowIcon = () => (
   </svg>
 );
 
+const SpinnerIcon = () => (
+  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+  </svg>
+);
+
 const Login: React.FC = () => {
-  const [username, setUsername] = useState("");
+  const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
     try {
-      await login(username, password);
+      await login(userId, password);
       navigate("/dashboard");
-    } catch (err) {
-      setError("Invalid credentials");
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Invalid credentials";
+      setError(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -64,25 +77,26 @@ const Login: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Username */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* User ID */}
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2">
                 <UserIcon />
               </span>
               <input
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                placeholder="User ID"
                 required
-                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                disabled={submitting}
+                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition disabled:opacity-50"
               />
             </div>
 
             {/* Password */}
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2">
                 <LockIcon />
               </span>
               <input
@@ -91,19 +105,22 @@ const Login: React.FC = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
                 required
-                className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+                disabled={submitting}
+                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition disabled:opacity-50"
               />
             </div>
 
             {/* Login Button */}
-            <button
-              type="submit"
-              className="w-auto mx-auto flex items-center gap-2 px-8 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer"
-              style={{ display: "flex", margin: "0 auto" }}
-            >
-              <LoginArrowIcon />
-              Login
-            </button>
+            <div className="pt-2 flex justify-center">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex items-center justify-center gap-2 px-10 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {submitting ? <SpinnerIcon /> : <LoginArrowIcon />}
+                {submitting ? "Signing in..." : "Login"}
+              </button>
+            </div>
           </form>
         </div>
       </div>

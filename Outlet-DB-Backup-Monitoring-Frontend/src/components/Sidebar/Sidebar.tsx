@@ -45,16 +45,16 @@ const ReportsIcon = () => (
   </svg>
 );
 
-const navItems = [
-  { to: "/dashboard", label: "Dashboard", icon: <DashboardIcon /> },
-  { to: "/servers", label: "Servers", icon: <ServersIcon /> },
-  { to: "/backups", label: "Backups", icon: <BackupsIcon /> },
-  { to: "/reports", label: "Reports", icon: <ReportsIcon /> },
-  { to: "/settings", label: "Settings", icon: <SettingsIcon /> },
+const allNavItems = [
+  { to: "/dashboard", label: "Dashboard", icon: <DashboardIcon />, adminOnly: false },
+  { to: "/servers", label: "Servers", icon: <ServersIcon />, adminOnly: false },
+  { to: "/backups", label: "Backups", icon: <BackupsIcon />, adminOnly: false },
+  { to: "/reports", label: "Reports", icon: <ReportsIcon />, adminOnly: false },
+  { to: "/settings", label: "Settings", icon: <SettingsIcon />, adminOnly: true },
 ];
 
 const Sidebar: React.FC = () => {
-  const { logout } = useContext(AuthContext);
+  const { user, isAdmin, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -62,6 +62,8 @@ const Sidebar: React.FC = () => {
     logout();
     navigate("/login");
   };
+
+  const navItems = allNavItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <div className="w-64 min-h-screen bg-gray-900 text-white flex flex-col">
@@ -92,8 +94,16 @@ const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      {/* Logout */}
+      {/* User info + Logout */}
       <div className="px-3 py-4 border-t border-gray-700">
+        {user && (
+          <div className="px-4 mb-3">
+            <p className="text-sm font-medium text-white truncate">{user.userName}</p>
+            <p className="text-xs text-gray-400">
+              {user.userType === "A" ? "Admin" : "Support"} &middot; {user.userId}
+            </p>
+          </div>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
