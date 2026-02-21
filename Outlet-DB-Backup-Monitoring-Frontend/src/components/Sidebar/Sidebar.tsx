@@ -66,7 +66,7 @@ const Sidebar: React.FC = () => {
   const navItems = allNavItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <div className="w-64 min-h-screen bg-gray-900 text-white flex flex-col">
+    <div className="w-64 h-screen bg-gray-900 text-white flex flex-col fixed top-0 left-0 z-30">
       {/* Brand */}
       <div className="px-6 py-5 border-b border-gray-700">
         <h2 className="text-lg font-bold tracking-wide">Backup Monitor</h2>

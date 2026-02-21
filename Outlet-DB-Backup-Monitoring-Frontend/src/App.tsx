@@ -40,9 +40,9 @@ const AdminRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
 const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <ProtectedRoute
     element={
-      <div className="flex w-full min-h-screen">
+      <div className="min-h-screen">
         <Sidebar />
-        <div className="flex-1 p-6">{children}</div>
+        <div className="ml-64 min-h-screen">{children}</div>
       </div>
     }
   />
@@ -51,9 +51,9 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
 const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <AdminRoute
     element={
-      <div className="flex w-full min-h-screen">
+      <div className="min-h-screen">
         <Sidebar />
-        <div className="flex-1 p-6">{children}</div>
+        <div className="ml-64 min-h-screen">{children}</div>
       </div>
     }
   />
