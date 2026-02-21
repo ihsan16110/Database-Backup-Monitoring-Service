@@ -545,6 +545,24 @@ const Backups: React.FC = () => {
         </div>
       )}
 
+      {/* Select-all banner (above the table, Gmail-style) */}
+      {!loading && !showAdvanced && filtered.length > 0 && showSelectAllBanner && (
+        <div className="mb-1 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-center text-blue-700">
+          All {paginatedFiltered.length} outlets on this page are selected.{" "}
+          <button onClick={selectAllFiltered} className="font-semibold underline hover:text-blue-900">
+            Select all {filtered.length} {statusFilter === "failed" ? "failed " : ""}outlets
+          </button>
+        </div>
+      )}
+      {!loading && !showAdvanced && filtered.length > 0 && allFilteredSelected && filtered.length > pageSize && (
+        <div className="mb-1 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-center text-blue-700">
+          All {filtered.length} {statusFilter === "failed" ? "failed " : ""}outlets are selected.{" "}
+          <button onClick={() => setSelected(new Set())} className="font-semibold underline hover:text-blue-900">
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* Backup Table */}
       {!loading && !showAdvanced && filtered.length > 0 && (
         <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -574,26 +592,6 @@ const Backups: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {showSelectAllBanner && (
-                  <tr>
-                    <td colSpan={isIB ? 9 : 8} className="bg-blue-50 px-4 py-2 text-sm text-center text-blue-700">
-                      All {paginatedFiltered.length} outlets on this page are selected.{" "}
-                      <button onClick={selectAllFiltered} className="font-semibold underline hover:text-blue-900">
-                        Select all {filtered.length} {statusFilter === "failed" ? "failed " : ""}outlets
-                      </button>
-                    </td>
-                  </tr>
-                )}
-                {allFilteredSelected && filtered.length > pageSize && (
-                  <tr>
-                    <td colSpan={isIB ? 9 : 8} className="bg-blue-50 px-4 py-2 text-sm text-center text-blue-700">
-                      All {filtered.length} {statusFilter === "failed" ? "failed " : ""}outlets are selected.{" "}
-                      <button onClick={() => setSelected(new Set())} className="font-semibold underline hover:text-blue-900">
-                        Clear selection
-                      </button>
-                    </td>
-                  </tr>
-                )}
                 {paginatedFiltered.map((r, i) => (
                   <tr
                     key={r.outletCode}

@@ -1,0 +1,13 @@
+# Logs (mounted Docker volume)
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
