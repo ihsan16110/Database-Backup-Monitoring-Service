@@ -13,6 +13,8 @@ const Reports: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   const modeLabel = mode === "d-drive" ? "D Drive" : "IBSTORAGE";
 
@@ -34,6 +36,7 @@ const Reports: React.FC = () => {
     setLoading(true);
     setError(null);
     setSearched(true);
+    setPage(1);
 
     const params = new URLSearchParams();
     if (selectedOutlet) params.append("outlet", selectedOutlet);
@@ -66,6 +69,8 @@ const Reports: React.FC = () => {
 
   const onlineCount = results.filter((r: any) => r.status === "Successful").length;
   const errorCount = results.filter((r: any) => r.status === "Error").length;
+  const totalPages = Math.ceil(results.length / pageSize);
+  const paginatedResults = results.slice((page - 1) * pageSize, page * pageSize);
 
   const exportCSV = () => {
     const isIB = mode === "ibstorage";
@@ -376,9 +381,9 @@ const Reports: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {results.map((r: any, i: number) => (
+                {paginatedResults.map((r: any, i: number) => (
                   <tr key={i} className={`hover:bg-blue-50/40 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
-                    <td className="px-6 py-3.5 text-gray-400 font-mono text-xs">{i + 1}</td>
+                    <td className="px-6 py-3.5 text-gray-400 font-mono text-xs">{(page - 1) * pageSize + i + 1}</td>
                     <td className="px-6 py-3.5 font-semibold text-gray-900">{r.outletCode}</td>
                     <td className="px-6 py-3.5 text-gray-600 font-mono text-xs">{r.server}</td>
                     {mode === "ibstorage" && (
@@ -419,9 +424,76 @@ const Reports: React.FC = () => {
             </table>
           </div>
 
-          {/* Table Footer */}
+          {/* Table Footer with Pagination */}
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between">
-            <span>Showing {results.length} {results.length === 1 ? "entry" : "entries"}</span>
+            <span>
+              Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, results.length)} of{" "}
+              {results.length} {results.length === 1 ? "entry" : "entries"}
+            </span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className="px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setPage(page - 1)}
+                  disabled={page === 1}
+                  className="px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(
+                    (p) =>
+                      p === 1 ||
+                      p === totalPages ||
+                      (p >= page - 1 && p <= page + 1)
+                  )
+                  .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                      acc.push("...");
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    typeof item === "string" ? (
+                      <span key={`dots-${idx}`} className="px-1 text-xs text-gray-400">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        onClick={() => setPage(item)}
+                        className={`px-2.5 py-1 text-xs rounded border ${
+                          page === item
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "border-gray-300 bg-white hover:bg-gray-100"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                <button
+                  onClick={() => setPage(page + 1)}
+                  disabled={page === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={page === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Last
+                </button>
+              </div>
+            )}
             <span>
               {onlineCount} successful, {errorCount} failed
             </span>
