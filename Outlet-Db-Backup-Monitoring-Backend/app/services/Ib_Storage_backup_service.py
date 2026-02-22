@@ -168,14 +168,26 @@ class IBStorageMonitor:
                     # follow_symlinks=False uses cached dir listing metadata
                     # instead of opening each file individually
                     file_info = entry.stat(follow_symlinks=False)
-                except Exception as e:
-                    self.logger.warning(f"[IB] Cannot stat {entry.name}: {e}")
-                    continue
+                    file_size = file_info.st_size
+                    mod_time = datetime.fromtimestamp(file_info.st_mtime, tz=timezone.utc)
+                except Exception:
+                    # Fallback: extract from raw directory listing when stat() fails
+                    # with STATUS_INVALID_PARAMETER on USB/IBSTORAGE drives
+                    try:
+                        dir_info = entry._dir_info
+                        file_size = dir_info['end_of_file'].get_value()
+                        write_time = dir_info['last_write_time'].get_value()
+                        # Convert Windows FILETIME (100-ns since 1601-01-01) to Unix epoch
+                        EPOCH_DIFF = 116444736000000000
+                        unix_ts = (write_time - EPOCH_DIFF) / 10000000.0
+                        mod_time = datetime.fromtimestamp(unix_ts, tz=timezone.utc)
+                        self.logger.info(f"[IB] Used raw dir info for {entry.name} (size={file_size})")
+                    except Exception as e2:
+                        self.logger.warning(f"[IB] Cannot get info for {entry.name}: {e2}")
+                        continue
 
-                if file_info.st_size < min_size:
+                if file_size < min_size:
                     continue
-
-                mod_time = datetime.fromtimestamp(file_info.st_mtime, tz=timezone.utc)
 
                 # Skip files newer than the cutoff for back-date scans
                 if cutoff_dt and mod_time > cutoff_dt:
@@ -184,7 +196,7 @@ class IBStorageMonitor:
                 if not latest_time or mod_time > latest_time:
                     latest_file = entry.name
                     latest_time = mod_time
-                    latest_size = file_info.st_size
+                    latest_size = file_size
 
             if latest_file:
                 file_size_gb = round(latest_size / (1024 * 1024 * 1024), 2)
