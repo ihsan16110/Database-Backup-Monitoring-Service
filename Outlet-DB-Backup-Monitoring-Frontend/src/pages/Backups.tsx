@@ -42,6 +42,33 @@ const getStatusBadge = (record: BackupRecord) => {
   return { label: "Error", className: "bg-red-100 text-red-700", tooltip: details || "Unknown error" };
 };
 
+type FilterableColumn = "outletCode" | "server" | "statusLabel" | "lastModified" | "file" | "backupsize" | "driveLetter";
+type ColumnFilters = Record<FilterableColumn, Set<string> | null>;
+
+const emptyColumnFilters: ColumnFilters = {
+  outletCode: null, server: null, statusLabel: null,
+  lastModified: null, file: null, backupsize: null, driveLetter: null,
+};
+
+const getColumnValue = (record: BackupRecord, col: FilterableColumn): string => {
+  switch (col) {
+    case "outletCode": return record.outletCode || "-";
+    case "server": return record.server || "-";
+    case "statusLabel": return getStatusBadge(record).label;
+    case "lastModified":
+      return record.lastModified
+        ? new Date(record.lastModified).toLocaleString("en-GB", {
+            day: "2-digit", month: "2-digit", year: "numeric",
+            hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+          })
+        : "-";
+    case "file": return record.file || "-";
+    case "backupsize": return record.backupsize || "-";
+    case "driveLetter": return record.driveLetter || "-";
+    default: return "-";
+  }
+};
+
 const Backups: React.FC = () => {
   const [mode, setMode] = useState<BackupMode>("d-drive");
 
@@ -68,6 +95,14 @@ const Backups: React.FC = () => {
     current?: string;
   } | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const [openFilter, setOpenFilter] = useState<FilterableColumn | null>(null);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({ ...emptyColumnFilters });
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  const resetColumnFilters = () => {
+    setColumnFilters({ ...emptyColumnFilters });
+    setOpenFilter(null);
+  };
 
   // Cleanup EventSource on unmount
   useEffect(() => {
@@ -78,14 +113,46 @@ const Backups: React.FC = () => {
     };
   }, []);
 
+  // Close filter dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+        setOpenFilter(null);
+      }
+    };
+    if (openFilter !== null) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openFilter]);
+
+  // Reset column filters when search changes
+  useEffect(() => {
+    setColumnFilters({ ...emptyColumnFilters });
+    setOpenFilter(null);
+  }, [search]);
+
+  // Reset page when column filters change
+  useEffect(() => {
+    setPage(1);
+  }, [columnFilters]);
+
   const results: BackupRecord[] = data?.data || [];
   const advancedDateResults: BackupRecord[] = data?.advancedDate || [];
+  const isIB = mode === "ibstorage";
 
   const searchFiltered = results.filter(
     (r) =>
       r.outletCode?.toLowerCase().includes(search.toLowerCase()) ||
       r.server?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const getUniqueValues = (col: FilterableColumn): string[] => {
+    const values = new Set<string>();
+    searchFiltered.forEach((r) => values.add(getColumnValue(r, col)));
+    return Array.from(values).sort();
+  };
+
   const successCount = searchFiltered.filter(
     (r) => r.status === "Successful"
   ).length;
@@ -93,7 +160,20 @@ const Backups: React.FC = () => {
     (r) => r.status !== "Successful"
   ).length;
 
-  const filtered = searchFiltered.filter((r) => {
+  // Apply column filters (AND logic across all columns)
+  const columnFiltered = searchFiltered.filter((r) => {
+    const cols: FilterableColumn[] = [
+      "outletCode", "server", "statusLabel", "lastModified", "file", "backupsize",
+      ...(isIB ? ["driveLetter" as FilterableColumn] : []),
+    ];
+    return cols.every((col) => {
+      const filterSet = columnFilters[col];
+      if (filterSet === null) return true;
+      return filterSet.has(getColumnValue(r, col));
+    });
+  });
+
+  const filtered = columnFiltered.filter((r) => {
     if (statusFilter === "success") return r.status === "Successful";
     if (statusFilter === "failed") return r.status !== "Successful";
     return true;
@@ -102,7 +182,6 @@ const Backups: React.FC = () => {
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginatedFiltered = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const isIB = mode === "ibstorage";
   const modeLabel = isIB ? "IBSTORAGE" : "D Drive";
 
   // --- Selection helpers ---
@@ -188,6 +267,7 @@ const Backups: React.FC = () => {
     setScanProgress(null);
     setScanning(false);
     setPage(1);
+    resetColumnFilters();
   };
 
   const handleScan = () => {
@@ -253,6 +333,95 @@ const Backups: React.FC = () => {
       setScanProgress(null);
       setSyncMsg(`${modeLabel} scan connection failed. Please try again.`);
     };
+  };
+
+  // --- Column filter dropdown header ---
+  const ColumnHeader = ({ label, column }: { label: string; column: FilterableColumn }) => {
+    const isOpen = openFilter === column;
+    const filterSet = columnFilters[column];
+    const isFiltered = filterSet !== null;
+    const uniqueVals = getUniqueValues(column);
+
+    const toggleDropdown = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpenFilter(isOpen ? null : column);
+    };
+
+    const handleSelectAll = () => {
+      setColumnFilters((prev) => ({ ...prev, [column]: null }));
+    };
+
+    const handleClearAll = () => {
+      setColumnFilters((prev) => ({ ...prev, [column]: new Set<string>() }));
+    };
+
+    const handleToggleValue = (value: string) => {
+      setColumnFilters((prev) => {
+        const current = prev[column];
+        let newSet: Set<string>;
+        if (current === null) {
+          newSet = new Set(uniqueVals);
+          newSet.delete(value);
+        } else {
+          newSet = new Set(current);
+          if (newSet.has(value)) newSet.delete(value);
+          else newSet.add(value);
+        }
+        if (newSet.size === uniqueVals.length) return { ...prev, [column]: null };
+        return { ...prev, [column]: newSet };
+      });
+    };
+
+    const isValueChecked = (value: string): boolean => {
+      if (filterSet === null) return true;
+      return filterSet.has(value);
+    };
+
+    return (
+      <th className="px-4 py-3 relative">
+        <div className="flex items-center gap-1">
+          <span>{label}</span>
+          <button
+            onClick={toggleDropdown}
+            className={`ml-0.5 p-0.5 rounded hover:bg-gray-200 transition-colors ${
+              isFiltered ? "text-blue-600" : "text-gray-400"
+            }`}
+            title={`Filter by ${label}`}
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+        {isOpen && (
+          <div
+            ref={filterDropdownRef}
+            className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 text-xs font-normal normal-case tracking-normal"
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+              <button onClick={handleSelectAll} className="text-blue-600 hover:underline">Select All</button>
+              <button onClick={handleClearAll} className="text-red-500 hover:underline">Clear All</button>
+            </div>
+            <div className="max-h-48 overflow-y-auto px-1 py-1">
+              {uniqueVals.map((val) => (
+                <label key={val} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isValueChecked(val)}
+                    onChange={() => handleToggleValue(val)}
+                    className="rounded border-gray-300 text-blue-600"
+                  />
+                  <span className="truncate" title={val}>{val}</span>
+                </label>
+              ))}
+              {uniqueVals.length === 0 && (
+                <p className="px-3 py-2 text-gray-400">No values</p>
+              )}
+            </div>
+          </div>
+        )}
+      </th>
+    );
   };
 
   return (
@@ -563,9 +732,19 @@ const Backups: React.FC = () => {
         </div>
       )}
 
+      {/* Column filter active indicator */}
+      {Object.values(columnFilters).some((f) => f !== null) && (
+        <div className="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-center justify-between">
+          <span>Column filters active ({columnFiltered.length} of {searchFiltered.length} rows)</span>
+          <button onClick={resetColumnFilters} className="text-blue-600 hover:underline text-xs font-medium">
+            Clear all filters
+          </button>
+        </div>
+      )}
+
       {/* Backup Table */}
       {!loading && !showAdvanced && filtered.length > 0 && (
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="bg-white shadow rounded-lg">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-gray-500 uppercase bg-gray-50">
@@ -582,13 +761,13 @@ const Backups: React.FC = () => {
                     />
                   </th>
                   <th className="px-4 py-3">#</th>
-                  <th className="px-4 py-3">Outlet</th>
-                  <th className="px-4 py-3">Server</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Last Backup</th>
-                  <th className="px-4 py-3">Backup File</th>
-                  <th className="px-4 py-3">Size</th>
-                  {isIB && <th className="px-4 py-3">Drive</th>}
+                  <ColumnHeader label="Outlet" column="outletCode" />
+                  <ColumnHeader label="Server" column="server" />
+                  <ColumnHeader label="Status" column="statusLabel" />
+                  <ColumnHeader label="Last Backup" column="lastModified" />
+                  <ColumnHeader label="Backup File" column="file" />
+                  <ColumnHeader label="Size" column="backupsize" />
+                  {isIB && <ColumnHeader label="Drive" column="driveLetter" />}
                 </tr>
               </thead>
               <tbody>
