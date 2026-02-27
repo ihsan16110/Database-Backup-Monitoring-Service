@@ -29,13 +29,6 @@ const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => 
   return user ? <>{element}</> : <Navigate to="/login" replace />;
 };
 
-const AdminRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
-  const { user, loading, isAdmin } = useContext(AuthContext);
-  if (loading) return <LoadingScreen />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (!isAdmin) return <Navigate to="/dashboard" replace />;
-  return <>{element}</>;
-};
 
 const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <ProtectedRoute
@@ -48,16 +41,6 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   />
 );
 
-const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <AdminRoute
-    element={
-      <div className="min-h-screen">
-        <Sidebar />
-        <div className="ml-64 min-h-screen">{children}</div>
-      </div>
-    }
-  />
-);
 
 const LoginGuard: React.FC = () => {
   const { user, loading } = useContext(AuthContext);
@@ -75,7 +58,7 @@ const App: React.FC = () => {
           <Route path="/backups" element={<ProtectedLayout><Backups /></ProtectedLayout>} />
           <Route path="/servers" element={<ProtectedLayout><Servers /></ProtectedLayout>} />
           <Route path="/reports" element={<ProtectedLayout><Reports /></ProtectedLayout>} />
-          <Route path="/settings" element={<AdminLayout><Settings /></AdminLayout>} />
+          <Route path="/settings" element={<ProtectedLayout><Settings /></ProtectedLayout>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>

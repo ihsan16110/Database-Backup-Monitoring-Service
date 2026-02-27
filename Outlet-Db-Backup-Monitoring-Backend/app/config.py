@@ -25,6 +25,8 @@ class Config:
     # Background Scheduler
     SCHEDULER_ENABLED = os.getenv('SCHEDULER_ENABLED', 'true').lower() == 'true'
     SCHEDULER_INTERVAL_MINUTES = int(os.getenv('SCHEDULER_INTERVAL_MINUTES', '60'))
+    SCHEDULER_START_HOUR = int(os.getenv('SCHEDULER_START_HOUR', '8'))
+    SCHEDULER_END_HOUR = int(os.getenv('SCHEDULER_END_HOUR', '0'))  # 0 = midnight (12 AM)
 
     # Central Server (EPSMirror) — read-only sync source
     CENTRAL_DB_SERVER = os.getenv('CENTRAL_DB_SERVER')

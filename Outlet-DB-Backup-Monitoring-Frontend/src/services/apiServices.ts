@@ -65,3 +65,18 @@ export const fetchSchedulerStatus = async (): Promise<any> => {
   const response = await api.get("/scheduler/status");
   return response.data;
 };
+
+export const fetchSchedulerConfig = async (): Promise<any> => {
+  const response = await api.get("/scheduler/config");
+  return response.data;
+};
+
+export const updateSchedulerConfig = async (config: {
+  intervalMinutes: number;
+  startHour: number;
+  endHour: number;
+  activeDays: string[];
+}): Promise<any> => {
+  const response = await api.put("/scheduler/config", config);
+  return response.data;
+};

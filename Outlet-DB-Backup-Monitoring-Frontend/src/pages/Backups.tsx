@@ -526,7 +526,7 @@ const Backups: React.FC = () => {
                   </span>
                 )}
                 <span className="ml-auto text-gray-400 text-xs">
-                  Every {schedulerStatus.intervalMinutes} min
+                  Hourly ({schedulerStatus.activeHours || `every ${schedulerStatus.intervalMinutes} min`})
                 </span>
               </>
             );

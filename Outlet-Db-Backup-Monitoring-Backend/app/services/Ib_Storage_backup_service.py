@@ -214,7 +214,11 @@ class IBStorageMonitor:
     # ------------------------------------------------------------------
 
     def save_backup_status(self, results):
-        """Save IBSTORAGE check results to IB_Storage_Backup_Stat."""
+        """Save IBSTORAGE check results to IB_Storage_Backup_Stat.
+
+        Skips UPDATE if key fields (Status, BackupFile, BackupFileSize, ErrorDetails,
+        DriveLetter) are unchanged from the existing record.
+        """
         self.logger.info(f"[IB] Saving {len(results)} results")
         today = self.scan_date if self.scan_date else date.today()
 
@@ -223,6 +227,7 @@ class IBStorageMonitor:
             if not conn:
                 return
 
+            updated = inserted = skipped = 0
             with conn:
                 cursor = conn.cursor()
                 for res in results:
@@ -243,13 +248,23 @@ class IBStorageMonitor:
                             self.logger.warning(f"[IB] Could not parse lastModified '{last_backup}' for {outlet_code}")
 
                     try:
+                        # Fetch existing record for comparison
                         cursor.execute(
-                            "SELECT COUNT(*) FROM [dbo].[IB_Storage_Backup_Stat] WHERE OutletServer = ? AND ScanDate = ?",
+                            "SELECT Status, BackupFile, BackupFileSize, ErrorDetails, DriveLetter FROM [dbo].[IB_Storage_Backup_Stat] WHERE OutletServer = ? AND ScanDate = ?",
                             (outlet_code, today)
                         )
-                        exists = cursor.fetchone()[0] > 0
+                        existing = cursor.fetchone()
 
-                        if exists:
+                        if existing:
+                            # Skip update if key fields are unchanged
+                            if (existing[0] == status and
+                                    (existing[1] or '') == (backup_file or '') and
+                                    (existing[2] or '') == (storage_used or '') and
+                                    (existing[3] or '') == (error_details or '') and
+                                    (existing[4] or '') == (drive_letter or '')):
+                                skipped += 1
+                                continue
+
                             cursor.execute("""
                                 UPDATE [dbo].[IB_Storage_Backup_Stat]
                                 SET Status = ?, LastBackupTaken = ?, BackupFile = ?, Duration = ?,
@@ -257,6 +272,7 @@ class IBStorageMonitor:
                                 WHERE OutletServer = ? AND ScanDate = ?
                             """, (status, last_backup_dt, backup_file, None, storage_used,
                                   error_details, drive_letter, outlet_code, today))
+                            updated += 1
                         else:
                             cursor.execute("""
                                 INSERT INTO [dbo].[IB_Storage_Backup_Stat]
@@ -265,11 +281,12 @@ class IBStorageMonitor:
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """, (outlet_code, status, last_backup_dt, backup_file, None,
                                   storage_used, today, error_details, drive_letter))
+                            inserted += 1
                     except Exception as sql_e:
                         self.logger.error(f"[IB] SQL Error for outlet {outlet_code}: {str(sql_e)}")
 
                 conn.commit()
-                self.logger.info(f"[IB] Committed updates for ScanDate={today}")
+                self.logger.info(f"[IB] IB_Storage_Backup_Stat ScanDate={today}: {inserted} inserted, {updated} updated, {skipped} unchanged")
         except Exception as e:
             self.logger.error(f"[IB] Database Persistence Error: {str(e)}")
             self.logger.error(traceback.format_exc())

@@ -205,7 +205,7 @@ class BackupMonitor:
         """Save check results to D_Drive_Backup_Stat with daily historical tracking.
 
         Logic:
-        - Same outlet + same day (ScanDate) → UPDATE the existing record
+        - Same outlet + same day (ScanDate) → UPDATE only if values changed, skip if identical
         - Same outlet + new day → INSERT a new record (previous days' records stay untouched)
         """
         self.logger.info(f"Starting save_backup_status for {len(results)} results")
@@ -217,6 +217,7 @@ class BackupMonitor:
                 self.logger.error("Failed to get DB connection for saving status")
                 return
 
+            updated = inserted = skipped = 0
             with conn:
                 cursor = conn.cursor()
                 for res in results:
@@ -227,37 +228,41 @@ class BackupMonitor:
                     storage_used = res.get('backupsize', 'N/A')
                     error_details = res.get('errorDetails')
 
-                    self.logger.info(f"Processing outlet {outlet_code}: status={status}")
-
                     try:
-                        # Check if record exists for this outlet + today's date
+                        # Fetch existing record for comparison
                         cursor.execute(
-                            "SELECT COUNT(*) FROM [dbo].[D_Drive_Backup_Stat] WHERE OutletServer = ? AND ScanDate = ?",
+                            "SELECT Status, BackupFile, BackupFileSize, ErrorDetails FROM [dbo].[D_Drive_Backup_Stat] WHERE OutletServer = ? AND ScanDate = ?",
                             (outlet_code, today)
                         )
-                        exists = cursor.fetchone()[0] > 0
+                        existing = cursor.fetchone()
 
-                        if exists:
-                            # Update today's record for this outlet
-                            self.logger.info(f"Updating today's record for {outlet_code} (ScanDate={today})")
+                        if existing:
+                            # Skip update if key fields are unchanged
+                            if (existing[0] == status and
+                                    (existing[1] or '') == (backup_file or '') and
+                                    (existing[2] or '') == (storage_used or '') and
+                                    (existing[3] or '') == (error_details or '')):
+                                skipped += 1
+                                continue
+
                             cursor.execute("""
                                 UPDATE [dbo].[D_Drive_Backup_Stat]
                                 SET Status = ?, LastBackupTaken = ?, BackupFile = ?, Duration = ?, BackupFileSize = ?, ErrorDetails = ?
                                 WHERE OutletServer = ? AND ScanDate = ?
                             """, (status, last_backup, backup_file, None, storage_used, error_details, outlet_code, today))
+                            updated += 1
                         else:
-                            # Insert new record for today (previous days remain untouched)
-                            self.logger.info(f"Inserting new record for {outlet_code} (ScanDate={today})")
                             cursor.execute("""
                                 INSERT INTO [dbo].[D_Drive_Backup_Stat]
                                 (OutletServer, Status, LastBackupTaken, BackupFile, Duration, BackupFileSize, ScanDate, ErrorDetails)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             """, (outlet_code, status, last_backup, backup_file, None, storage_used, today, error_details))
+                            inserted += 1
                     except Exception as sql_e:
                         self.logger.error(f"SQL Error for outlet {outlet_code}: {str(sql_e)}")
 
                 conn.commit()
-                self.logger.info(f"Successfully committed updates to D_Drive_Backup_Stat for ScanDate={today}")
+                self.logger.info(f"D_Drive_Backup_Stat ScanDate={today}: {inserted} inserted, {updated} updated, {skipped} unchanged")
         except Exception as e:
             self.logger.error(f"Database Persistence Error: {str(e)}")
             self.logger.error(traceback.format_exc())

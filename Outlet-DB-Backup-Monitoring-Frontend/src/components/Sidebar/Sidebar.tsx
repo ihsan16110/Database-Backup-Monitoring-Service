@@ -50,7 +50,7 @@ const allNavItems = [
   { to: "/servers", label: "Servers", icon: <ServersIcon />, adminOnly: false },
   { to: "/backups", label: "Backups", icon: <BackupsIcon />, adminOnly: false },
   { to: "/reports", label: "Reports", icon: <ReportsIcon />, adminOnly: false },
-  { to: "/settings", label: "Settings", icon: <SettingsIcon />, adminOnly: true },
+  { to: "/settings", label: "Settings", icon: <SettingsIcon />, adminOnly: false },
 ];
 
 const Sidebar: React.FC = () => {
