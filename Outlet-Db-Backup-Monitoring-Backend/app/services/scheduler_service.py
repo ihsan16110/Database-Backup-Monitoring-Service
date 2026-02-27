@@ -9,6 +9,7 @@ from app.logging_config import get_scheduler_logger
 
 logger = get_scheduler_logger()
 _scheduler = None
+_applied_config = None  # tracks last applied schedule to detect DB config changes
 
 # Day mapping: frontend label → APScheduler cron value
 DAY_MAP = {'Mon': 'mon', 'Tue': 'tue', 'Wed': 'wed', 'Thu': 'thu', 'Fri': 'fri', 'Sat': 'sat', 'Sun': 'sun'}
@@ -164,9 +165,12 @@ def update_scheduler_config(interval_minutes, start_hour, end_hour, active_days,
 # ------------------------------------------------------------------
 
 def _build_cron_hours(start_h, end_h):
-    """Build APScheduler cron hour string, e.g. '0,8-23'."""
+    """Build APScheduler cron hour string, e.g. '0-2,6-23' for 6 AM to 2 AM."""
     if end_h < start_h:
-        return f"{end_h},{start_h}-23"
+        # Wraps around midnight: e.g. start=6, end=2 → '0-2,6-23'
+        return f"0-{end_h},{start_h}-23"
+    if start_h == end_h:
+        return f"{start_h}"
     return f"{start_h}-{end_h}"
 
 
@@ -192,7 +196,7 @@ def _build_trigger(cron_hours, cron_days, minute, interval_minutes):
 
 def reschedule_jobs(interval_minutes, start_hour, end_hour, active_days):
     """Remove and re-add scheduler jobs with new cron config."""
-    global _scheduler
+    global _scheduler, _applied_config
     if not _scheduler or not _scheduler.running:
         logger.warning("[Scheduler] Cannot reschedule — scheduler not running")
         return
@@ -223,7 +227,25 @@ def reschedule_jobs(interval_minutes, start_hour, end_hour, active_days):
         misfire_grace_time=300, coalesce=True, max_instances=1,
     )
 
+    _applied_config = (interval_minutes, start_hour, end_hour, tuple(sorted(active_days)))
     logger.info(f"[Scheduler] Rescheduled — hours={cron_hours}, days={cron_days}, interval={interval_minutes}min")
+
+
+def _sync_schedule_from_db():
+    """If DB config differs from what this worker has applied, reschedule.
+
+    This handles the gunicorn multi-worker case: when worker A updates config
+    via the PUT endpoint, worker B's scheduler still has the old schedule.
+    Calling this on status requests ensures all workers catch up within 30s.
+    """
+    global _applied_config
+    if not _scheduler or not _scheduler.running:
+        return
+    cfg = get_scheduler_config()
+    config_key = (cfg['intervalMinutes'], cfg['startHour'], cfg['endHour'], tuple(sorted(cfg['activeDays'])))
+    if _applied_config != config_key:
+        logger.info("[Scheduler] Detected config change from DB, resyncing...")
+        reschedule_jobs(cfg['intervalMinutes'], cfg['startHour'], cfg['endHour'], cfg['activeDays'])
 
 
 # ------------------------------------------------------------------
@@ -354,6 +376,9 @@ def get_scheduler_status():
     """Return current scheduler status for both scan types + config."""
     global _scheduler
 
+    # Sync this worker's schedule if another worker updated the DB config
+    _sync_schedule_from_db()
+
     cfg = get_scheduler_config()
     result = {
         'd_drive': None,
@@ -408,7 +433,7 @@ def get_scheduler_status():
 
 def init_scheduler(app):
     """Initialize and start the background scheduler."""
-    global _scheduler
+    global _scheduler, _applied_config
     config = Config()
 
     if not config.SCHEDULER_ENABLED:
@@ -446,5 +471,6 @@ def init_scheduler(app):
         misfire_grace_time=300, coalesce=True, max_instances=1,
     )
 
+    _applied_config = (interval, start_h, end_h, tuple(sorted(active_days)))
     _scheduler.start()
     logger.info(f"[Scheduler] Started — hours={cron_hours}, days={cron_days}, interval={interval}min")
