@@ -69,3 +69,7 @@ def get_d_drive_logger():
 
 def get_ib_storage_logger():
     return _setup_logger('ib_storage', 'IB_Storage_Backup_log')
+
+
+def get_scheduler_logger():
+    return _setup_logger('scheduler', 'Scheduler_log')

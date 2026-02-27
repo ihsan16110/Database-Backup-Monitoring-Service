@@ -20,4 +20,11 @@ def create_app():
     from app.routes.api.v1.auth_routes import bp as auth_bp
     app.register_blueprint(auth_bp, url_prefix='/api/v1')
 
+    from app.routes.api.v1.scheduler_routes import bp as scheduler_bp
+    app.register_blueprint(scheduler_bp, url_prefix='/api/v1')
+
+    # Start background scheduler
+    from app.services.scheduler_service import init_scheduler
+    init_scheduler(app)
+
     return app

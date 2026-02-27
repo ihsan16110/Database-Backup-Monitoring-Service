@@ -60,3 +60,8 @@ export const fetchCurrentUser = async (): Promise<any> => {
   const response = await api.get("/auth/me");
   return response.data;
 };
+
+export const fetchSchedulerStatus = async (): Promise<any> => {
+  const response = await api.get("/scheduler/status");
+  return response.data;
+};

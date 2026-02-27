@@ -22,6 +22,10 @@ class Config:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'fallback-dev-secret-change-me')
     JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '8'))
 
+    # Background Scheduler
+    SCHEDULER_ENABLED = os.getenv('SCHEDULER_ENABLED', 'true').lower() == 'true'
+    SCHEDULER_INTERVAL_MINUTES = int(os.getenv('SCHEDULER_INTERVAL_MINUTES', '60'))
+
     # Central Server (EPSMirror) — read-only sync source
     CENTRAL_DB_SERVER = os.getenv('CENTRAL_DB_SERVER')
     CENTRAL_DB_DATABASE = os.getenv('CENTRAL_DB_DATABASE')

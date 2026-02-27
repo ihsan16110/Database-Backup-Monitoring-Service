@@ -6,3 +6,4 @@ gunicorn==23.0.0
 smbprotocol==1.15.0
 PyJWT==2.10.1
 bcrypt==4.3.0
+APScheduler==3.10.4

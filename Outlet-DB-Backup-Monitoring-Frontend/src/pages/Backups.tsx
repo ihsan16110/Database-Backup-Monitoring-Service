@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import useFetch from "../hooks/useFetch";
-import { syncOutlets, syncIBStorageOutlets } from "../services/apiServices";
+import { syncOutlets, syncIBStorageOutlets, fetchSchedulerStatus } from "../services/apiServices";
 
 type BackupMode = "d-drive" | "ibstorage";
 
@@ -98,6 +98,7 @@ const Backups: React.FC = () => {
   const [openFilter, setOpenFilter] = useState<FilterableColumn | null>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({ ...emptyColumnFilters });
   const filterDropdownRef = useRef<HTMLDivElement>(null);
+  const [schedulerStatus, setSchedulerStatus] = useState<any>(null);
 
   const resetColumnFilters = () => {
     setColumnFilters({ ...emptyColumnFilters });
@@ -111,6 +112,16 @@ const Backups: React.FC = () => {
         eventSourceRef.current.close();
       }
     };
+  }, []);
+
+  // Poll scheduler status every 30 seconds
+  useEffect(() => {
+    const loadStatus = () => {
+      fetchSchedulerStatus().then(setSchedulerStatus).catch(() => {});
+    };
+    loadStatus();
+    const interval = setInterval(loadStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Close filter dropdown on click outside
@@ -463,6 +474,65 @@ const Backups: React.FC = () => {
           IBSTORAGE
         </button>
       </div>
+
+      {/* Auto-scan status bar */}
+      {schedulerStatus && (
+        <div className="flex items-center gap-4 mb-4 bg-white rounded-lg shadow px-4 py-2.5 text-sm">
+          {(() => {
+            const info = mode === "d-drive" ? schedulerStatus.d_drive : schedulerStatus.ib_storage;
+            const nextRun = mode === "d-drive" ? schedulerStatus.nextDDriveRun : schedulerStatus.nextIBStorageRun;
+            const isRunning = info?.status === "Running";
+            const isFailed = info?.status === "Failed";
+            const dotClass = isRunning
+              ? "bg-blue-500 animate-pulse"
+              : isFailed
+              ? "bg-red-500"
+              : "bg-green-500";
+            return (
+              <>
+                <span className="flex items-center gap-2 text-gray-700 font-medium">
+                  <span className={`inline-block w-2.5 h-2.5 rounded-full ${dotClass}`} />
+                  Auto-Scan
+                </span>
+                {isRunning ? (
+                  <span className="text-blue-600">Scanning...</span>
+                ) : info?.lastScanEnd ? (
+                  <span className="text-gray-500">
+                    Last run:{" "}
+                    {new Date(info.lastScanEnd).toLocaleString(undefined, {
+                      month: "2-digit", day: "2-digit",
+                      hour: "numeric", minute: "2-digit", hour12: true,
+                    })}
+                    {info.total != null && (
+                      <span className="ml-1">
+                        ({info.successful}/{info.total} successful)
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">No auto-scan yet</span>
+                )}
+                {nextRun && !isRunning && (
+                  <span className="text-gray-400">
+                    Next:{" "}
+                    {new Date(nextRun).toLocaleString(undefined, {
+                      hour: "numeric", minute: "2-digit", hour12: true,
+                    })}
+                  </span>
+                )}
+                {isFailed && info?.errorMessage && (
+                  <span className="text-red-500 text-xs truncate max-w-xs" title={info.errorMessage}>
+                    {info.errorMessage}
+                  </span>
+                )}
+                <span className="ml-auto text-gray-400 text-xs">
+                  Every {schedulerStatus.intervalMinutes} min
+                </span>
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Scan toolbar: date picker + scan button */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">
