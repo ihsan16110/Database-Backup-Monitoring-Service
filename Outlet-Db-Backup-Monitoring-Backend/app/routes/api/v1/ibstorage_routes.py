@@ -118,7 +118,20 @@ def scan_with_progress():
             with ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS) as executor:
                 futures = {executor.submit(monitor.check_server, o): o for o in outlets}
                 for future in as_completed(futures):
-                    result = future.result()
+                    outlet = futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        monitor.log_error(f"[IB] Scan task failed for outlet {outlet[0]} ({outlet[1]}): {str(e)}", severity="ERROR")
+                        result = {
+                            'outletCode': outlet[0],
+                            'server': outlet[1],
+                            'lastModified': None,
+                            'status': 'Error',
+                            'errorDetails': f"Scan task failure: {str(e)}",
+                            'backupsize': None,
+                            'driveLetter': None
+                        }
                     results.append(result)
                     if result['status'] == 'Successful':
                         success += 1
@@ -126,7 +139,8 @@ def scan_with_progress():
                         failed += 1
                     yield f"data: {json.dumps({'type': 'progress', 'completed': len(results), 'total': total, 'success': success, 'failed': failed, 'current': result['outletCode']})}\n\n"
 
-            monitor.save_backup_status(results)
+            if results:
+                monitor.save_backup_status(results)
 
             yield f"data: {json.dumps({'type': 'complete', 'total': total, 'success': success, 'failed': failed})}\n\n"
         except Exception as e:

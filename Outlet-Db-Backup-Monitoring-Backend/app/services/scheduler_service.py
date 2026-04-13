@@ -316,7 +316,22 @@ def run_d_drive_scan():
         total = len(outlets)
         results = []
         with ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS) as executor:
-            results = list(executor.map(monitor.check_server, outlets))
+            futures = {executor.submit(monitor.check_server, outlet): outlet for outlet in outlets}
+            for future in as_completed(futures):
+                outlet = futures[future]
+                try:
+                    result = future.result()
+                except Exception as e:
+                    logger.error(f"[Scheduler] Scan task failed for {outlet[0]} ({outlet[1]}): {e}")
+                    result = {
+                        'outletCode': outlet[0],
+                        'server': outlet[1],
+                        'lastModified': None,
+                        'status': 'Error',
+                        'errorDetails': str(e),
+                        'backupsize': None
+                    }
+                results.append(result)
 
         success = sum(1 for r in results if r['status'] == 'Successful')
         failed = total - success
@@ -353,7 +368,22 @@ def run_ib_storage_scan():
         total = len(outlets)
         results = []
         with ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS) as executor:
-            results = list(executor.map(monitor.check_server, outlets))
+            futures = {executor.submit(monitor.check_server, outlet): outlet for outlet in outlets}
+            for future in as_completed(futures):
+                outlet = futures[future]
+                try:
+                    result = future.result()
+                except Exception as e:
+                    logger.error(f"[Scheduler] Scan task failed for {outlet[0]} ({outlet[1]}): {e}")
+                    result = {
+                        'outletCode': outlet[0],
+                        'server': outlet[1],
+                        'lastModified': None,
+                        'status': 'Error',
+                        'errorDetails': str(e),
+                        'backupsize': None
+                    }
+                results.append(result)
 
         success = sum(1 for r in results if r['status'] == 'Successful')
         failed = total - success
