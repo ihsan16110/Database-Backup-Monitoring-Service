@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request, g
-from app.services.scheduler_service import get_scheduler_status, get_scheduler_config, update_scheduler_config
+from app.services.scheduler_service import get_scheduler_status, get_scheduler_config, update_scheduler_config, cleanup_stale_scheduler_status
 from app.middleware.auth import token_required, role_required
 from datetime import datetime, timezone
 
@@ -74,5 +74,21 @@ def put_config():
         update_scheduler_config(interval, start_hour, end_hour, active_days, updated_by)
         cfg = get_scheduler_config()
         return jsonify({'status': 'success', 'message': 'Schedule updated', **cfg})
+    except Exception as e:
+        return jsonify({'status': 'Error', 'message': str(e)}), 500
+
+
+@bp.route('/scheduler/cleanup', methods=['POST'])
+@token_required
+@role_required('A', 'S')
+def cleanup_scheduler_status():
+    """Clear stale scheduler status rows that are stuck in Running."""
+    try:
+        reset_count = cleanup_stale_scheduler_status()
+        return jsonify({
+            'status': 'success',
+            'message': f'Cleared {reset_count} stale running status row(s)',
+            'resetCount': reset_count,
+        })
     except Exception as e:
         return jsonify({'status': 'Error', 'message': str(e)}), 500

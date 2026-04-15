@@ -190,6 +190,35 @@ def _build_trigger(cron_hours, cron_days, minute, interval_minutes):
                        day_of_week=cron_days)
 
 
+def _clear_stale_running_statuses(timeout_minutes):
+    """Reset stale 'Running' rows older than timeout_minutes."""
+    stale_count = 0
+    try:
+        conn = _get_db_connection()
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE [dbo].[Scheduler_Status] "
+                "SET Status = 'Idle', LastScanEnd = GETDATE(), "
+                "ErrorMessage = ISNULL(ErrorMessage, '') + ' [Reset stale running after timeout]' "
+                "WHERE Status = 'Running' "
+                "AND LastScanStart < DATEADD(minute, ?, GETDATE())",
+                (-timeout_minutes,)
+            )
+            stale_count = cursor.rowcount
+            conn.commit()
+        if stale_count > 0:
+            logger.warning(f"[Scheduler] Reset {stale_count} stale running status rows older than {timeout_minutes} minutes")
+    except Exception as e:
+        logger.error(f"[Scheduler] Failed to clear stale scheduler status rows: {e}")
+    return stale_count
+
+
+def cleanup_stale_scheduler_status():
+    """Public helper used by admin endpoints to clear stale running statuses."""
+    return _clear_stale_running_statuses(Config.SCHEDULER_STALE_RUNNING_TIMEOUT_MINUTES)
+
+
 # ------------------------------------------------------------------
 # Dynamic reschedule
 # ------------------------------------------------------------------
@@ -254,6 +283,7 @@ def _sync_schedule_from_db():
 
 def _acquire_lock(scan_type):
     """Try to acquire the run lock for a scan type. Returns True if acquired."""
+    _clear_stale_running_statuses(Config.SCHEDULER_STALE_RUNNING_TIMEOUT_MINUTES)
     try:
         conn = _get_db_connection()
         with conn:
@@ -452,17 +482,20 @@ def get_scheduler_status():
 
     # Sync this worker's schedule if another worker updated the DB config
     _sync_schedule_from_db()
+    stale_reset_count = _clear_stale_running_statuses(Config.SCHEDULER_STALE_RUNNING_TIMEOUT_MINUTES)
 
     cfg = get_scheduler_config()
     result = {
         'd_drive': None,
         'ib_storage': None,
         'schedulerEnabled': Config.SCHEDULER_ENABLED,
+        'schedulerRunning': bool(_scheduler and _scheduler.running),
         'intervalMinutes': cfg['intervalMinutes'],
         'activeHours': f"{cfg['startHour']}:00 - {cfg['endHour']}:00",
         'activeDays': cfg['activeDays'],
         'nextDDriveRun': None,
         'nextIBStorageRun': None,
+        'staleStatusResetCount': stale_reset_count,
     }
 
     try:
@@ -516,6 +549,7 @@ def init_scheduler(app):
 
     ensure_status_table()
     ensure_config_table()
+    _clear_stale_running_statuses(config.SCHEDULER_STALE_RUNNING_TIMEOUT_MINUTES)
 
     # Load config from DB
     cfg = get_scheduler_config()

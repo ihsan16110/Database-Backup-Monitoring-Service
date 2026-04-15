@@ -3,6 +3,7 @@ import {
   fetchSchedulerConfig,
   updateSchedulerConfig,
   fetchSchedulerStatus,
+  cleanupSchedulerStatus,
 } from "../services/apiServices";
 
 const INTERVAL_OPTIONS = [
@@ -31,6 +32,8 @@ const Settings: React.FC = () => {
   const [activeDays, setActiveDays] = useState<string[]>([...ALL_DAYS]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [status, setStatus] = useState<any>(null);
 
@@ -78,13 +81,33 @@ const Settings: React.FC = () => {
       });
       setToast({ type: "success", message: "Schedule updated successfully" });
       // Refresh status to show new next-run times
-      fetchSchedulerStatus().then(setStatus).catch(() => {});
+      fetchSchedulerStatus().then((newStatus) => {
+        setStatus(newStatus);
+      }).catch(() => {});
     } catch (err: any) {
       const msg = err?.response?.data?.message || "Failed to update schedule";
       setToast({ type: "error", message: msg });
     } finally {
       setSaving(false);
       setTimeout(() => setToast(null), 4000);
+    }
+  };
+
+  const handleCleanup = async () => {
+    setCleanupLoading(true);
+    setCleanupMessage(null);
+    try {
+      const response = await cleanupSchedulerStatus();
+      setCleanupMessage(response.message || `Cleared ${response.resetCount} stale row(s)`);
+      fetchSchedulerStatus().then((newStatus) => {
+        setStatus(newStatus);
+      }).catch(() => {});
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "Failed to clear stale scheduler status";
+      setCleanupMessage(msg);
+    } finally {
+      setCleanupLoading(false);
+      window.setTimeout(() => setCleanupMessage(null), 5000);
     }
   };
 
@@ -220,7 +243,31 @@ const Settings: React.FC = () => {
 
         {/* Current Status Card */}
         <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Scanner Status</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">Scanner Status</h2>
+              {status?.staleStatusResetCount > 0 && (
+                <p className="text-xs text-yellow-700 mt-1">
+                  Corrected {status.staleStatusResetCount} stale running status row(s).
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCleanup}
+                disabled={cleanupLoading}
+                className="px-3 py-2 rounded-lg text-xs font-medium bg-yellow-500 text-white hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cleanupLoading ? "Clearing..." : "Cleanup stale status"}
+              </button>
+            </div>
+          </div>
+
+          {cleanupMessage && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-yellow-50 text-sm text-yellow-800 border border-yellow-100">
+              {cleanupMessage}
+            </div>
+          )}
 
           {/* D Drive Status */}
           <div className="mb-5 p-4 bg-gray-50 rounded-lg">

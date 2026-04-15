@@ -71,6 +71,11 @@ export const fetchSchedulerConfig = async (): Promise<any> => {
   return response.data;
 };
 
+export const cleanupSchedulerStatus = async (): Promise<any> => {
+  const response = await api.post("/scheduler/cleanup");
+  return response.data;
+};
+
 export const updateSchedulerConfig = async (config: {
   intervalMinutes: number;
   startHour: number;

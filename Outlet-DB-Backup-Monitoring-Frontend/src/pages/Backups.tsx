@@ -520,6 +520,11 @@ const Backups: React.FC = () => {
                     })}
                   </span>
                 )}
+                {schedulerStatus?.staleStatusResetCount > 0 && (
+                  <span className="text-yellow-600 text-xs">
+                    Stale scheduler status was detected and corrected.
+                  </span>
+                )}
                 {isFailed && info?.errorMessage && (
                   <span className="text-red-500 text-xs truncate max-w-xs" title={info.errorMessage}>
                     {info.errorMessage}
