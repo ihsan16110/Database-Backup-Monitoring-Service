@@ -1,6 +1,6 @@
 import pyodbc
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -315,23 +315,45 @@ def run_d_drive_scan():
 
         total = len(outlets)
         results = []
-        with ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS) as executor:
+        executor = ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS)
+        try:
             futures = {executor.submit(monitor.check_server, outlet): outlet for outlet in outlets}
-            for future in as_completed(futures):
-                outlet = futures[future]
-                try:
-                    result = future.result()
-                except Exception as e:
-                    logger.error(f"[Scheduler] Scan task failed for {outlet[0]} ({outlet[1]}): {e}")
-                    result = {
-                        'outletCode': outlet[0],
-                        'server': outlet[1],
-                        'lastModified': None,
-                        'status': 'Error',
-                        'errorDetails': str(e),
-                        'backupsize': None
-                    }
-                results.append(result)
+            pending = set(futures)
+            task_timeout = monitor.config.TIMEOUT * 2
+
+            while pending:
+                done, pending = wait(pending, timeout=task_timeout, return_when=FIRST_COMPLETED)
+                if not done:
+                    logger.error(f"[Scheduler] Scan stalled: no worker completed in {task_timeout} seconds; marking {len(pending)} pending tasks as timed out.")
+                    for future in list(pending):
+                        outlet = futures[future]
+                        results.append({
+                            'outletCode': outlet[0],
+                            'server': outlet[1],
+                            'lastModified': None,
+                            'status': 'Error',
+                            'errorDetails': f"Scan task timed out after {task_timeout} seconds",
+                            'backupsize': None
+                        })
+                    break
+
+                for future in done:
+                    outlet = futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        logger.error(f"[Scheduler] Scan task failed for {outlet[0]} ({outlet[1]}): {e}")
+                        result = {
+                            'outletCode': outlet[0],
+                            'server': outlet[1],
+                            'lastModified': None,
+                            'status': 'Error',
+                            'errorDetails': str(e),
+                            'backupsize': None
+                        }
+                    results.append(result)
+        finally:
+            executor.shutdown(wait=False)
 
         success = sum(1 for r in results if r['status'] == 'Successful')
         failed = total - success
@@ -367,23 +389,45 @@ def run_ib_storage_scan():
 
         total = len(outlets)
         results = []
-        with ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS) as executor:
+        executor = ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS)
+        try:
             futures = {executor.submit(monitor.check_server, outlet): outlet for outlet in outlets}
-            for future in as_completed(futures):
-                outlet = futures[future]
-                try:
-                    result = future.result()
-                except Exception as e:
-                    logger.error(f"[Scheduler] Scan task failed for {outlet[0]} ({outlet[1]}): {e}")
-                    result = {
-                        'outletCode': outlet[0],
-                        'server': outlet[1],
-                        'lastModified': None,
-                        'status': 'Error',
-                        'errorDetails': str(e),
-                        'backupsize': None
-                    }
-                results.append(result)
+            pending = set(futures)
+            task_timeout = monitor.config.TIMEOUT * 2
+
+            while pending:
+                done, pending = wait(pending, timeout=task_timeout, return_when=FIRST_COMPLETED)
+                if not done:
+                    logger.error(f"[Scheduler] Scan stalled: no worker completed in {task_timeout} seconds; marking {len(pending)} pending tasks as timed out.")
+                    for future in list(pending):
+                        outlet = futures[future]
+                        results.append({
+                            'outletCode': outlet[0],
+                            'server': outlet[1],
+                            'lastModified': None,
+                            'status': 'Error',
+                            'errorDetails': f"Scan task timed out after {task_timeout} seconds",
+                            'backupsize': None
+                        })
+                    break
+
+                for future in done:
+                    outlet = futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        logger.error(f"[Scheduler] Scan task failed for {outlet[0]} ({outlet[1]}): {e}")
+                        result = {
+                            'outletCode': outlet[0],
+                            'server': outlet[1],
+                            'lastModified': None,
+                            'status': 'Error',
+                            'errorDetails': str(e),
+                            'backupsize': None
+                        }
+                    results.append(result)
+        finally:
+            executor.shutdown(wait=False)
 
         success = sum(1 for r in results if r['status'] == 'Successful')
         failed = total - success
