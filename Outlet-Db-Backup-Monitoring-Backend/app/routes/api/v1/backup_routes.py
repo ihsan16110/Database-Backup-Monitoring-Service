@@ -52,13 +52,11 @@ def backup_status():
             }), 500
 
     try:
-        outlets = monitor.get_outlets()
+        outlets = monitor.get_unscanned_outlets()
         if not outlets:
-            return jsonify({
-                'status': 'Error',
-                'message': 'No Active Outlets Found',
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }), 404
+            # If no unscanned outlets, return current stats
+            categorized = monitor.get_all_backup_stats()
+            return jsonify(_build_response(categorized, start_time))
 
         with ThreadPoolExecutor(max_workers=monitor.config.MAX_WORKERS) as executor:
             results = list(executor.map(monitor.check_server, outlets))
@@ -108,9 +106,10 @@ def scan_with_progress():
             if sync_result and (sync_result['inserted'] or sync_result['updated'] or sync_result['deactivated']):
                 yield f"data: {json.dumps({'type': 'sync', 'inserted': sync_result['inserted'], 'updated': sync_result['updated'], 'deactivated': sync_result['deactivated']})}\n\n"
 
-            outlets = monitor.get_outlets()
+            outlets = monitor.get_unscanned_outlets()
             if not outlets:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'No Active Outlets Found'})}\n\n"
+                yield f"data: {json.dumps({'type': 'info', 'message': 'All outlets already scanned for today'})}\n\n"
+                yield f"data: {json.dumps({'type': 'complete', 'total': 0, 'success': 0, 'failed': 0})}\n\n"
                 return
 
             total = len(outlets)

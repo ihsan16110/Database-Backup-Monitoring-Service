@@ -55,6 +55,32 @@ class BackupMonitor:
             self.logger.error(f"Database Error: {str(e)}")
             return []
 
+    def get_unscanned_outlets(self):
+        """Fetch active outlets that don't have a backup status record for today's scan date"""
+        try:
+            conn = self.get_db_connection()
+            if not conn:
+                return []
+            with conn:
+                cursor = conn.cursor()
+                today = self.scan_date if self.scan_date else date.today()
+                cursor.execute("""
+                    SELECT o.OutletCode, o.IPAddress
+                    FROM Outlets o
+                    WHERE o.ActiveDepot = 'Y'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM D_Drive_Backup_Stat b
+                        WHERE b.OutletServer = o.OutletCode
+                        AND b.ScanDate = ?
+                    )
+                """, (today,))
+                outlets = cursor.fetchall()
+                self.logger.info(f"Unscanned outlets for {today}: {len(outlets)} found")
+                return outlets
+        except pyodbc.Error as e:
+            self.logger.error(f"Database Error fetching unscanned outlets: {str(e)}")
+            return []
+
     def check_server(self, outlet):
         """Check server status with retry logic"""
         outlet_code, server_ip = outlet

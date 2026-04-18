@@ -432,6 +432,32 @@ class IBStorageMonitor:
             self.logger.error(f"[IB] Database Error: {str(e)}")
             return []
 
+    def get_unscanned_outlets(self):
+        """Fetch active outlets that don't have an IB storage backup status record for today's scan date"""
+        try:
+            conn = self.get_db_connection()
+            if not conn:
+                return []
+            with conn:
+                cursor = conn.cursor()
+                today = self.scan_date if self.scan_date else date.today()
+                cursor.execute("""
+                    SELECT o.OutletCode, o.IPAddress
+                    FROM Outlets o
+                    WHERE o.ActiveDepot = 'Y'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM IB_Storage_Backup_Stat b
+                        WHERE b.OutletServer = o.OutletCode
+                        AND b.ScanDate = ?
+                    )
+                """, (today,))
+                outlets = cursor.fetchall()
+                self.logger.info(f"[IB] Unscanned outlets for {today}: {len(outlets)} found")
+                return outlets
+        except pyodbc.Error as e:
+            self.logger.error(f"[IB] Database Error fetching unscanned outlets: {str(e)}")
+            return []
+
     def get_outlets_by_codes(self, codes):
         try:
             conn = self.get_db_connection()

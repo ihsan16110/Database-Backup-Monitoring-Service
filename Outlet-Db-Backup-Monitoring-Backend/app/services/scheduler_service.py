@@ -337,9 +337,9 @@ def run_d_drive_scan():
     try:
         from app.services.backup_service import BackupMonitor
         monitor = BackupMonitor()
-        outlets = monitor.get_outlets()
+        outlets = monitor.get_unscanned_outlets()
         if not outlets:
-            logger.warning(f"[Scheduler] No active outlets found for {scan_type}")
+            logger.info(f"[Scheduler] All outlets already scanned for today ({scan_type})")
             _release_lock(scan_type, 0, 0, 0)
             return
 
@@ -411,9 +411,9 @@ def run_ib_storage_scan():
     try:
         from app.services.Ib_Storage_backup_service import IBStorageMonitor
         monitor = IBStorageMonitor()
-        outlets = monitor.get_outlets()
+        outlets = monitor.get_unscanned_outlets()
         if not outlets:
-            logger.warning(f"[Scheduler] No active outlets found for {scan_type}")
+            logger.info(f"[Scheduler] All outlets already scanned for today ({scan_type})")
             _release_lock(scan_type, 0, 0, 0)
             return
 
